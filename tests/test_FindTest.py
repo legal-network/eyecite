@@ -231,6 +231,21 @@ class FindTest(TestCase):
              [case_citation(2, page='20', reporter_found='U. S.',
                             short=True, antecedent_guess='asdf',
                             pin_cite='20-25')]),
+            # Test short form citation with a parenthetical
+            ('before asdf, 1 U. S., at 2 (overruling xyz)',
+             [case_citation(2, page='2', reporter='U.S.',
+                            reporter_found='U. S.', short=True,
+                            antecedent_guess='asdf',
+                            parenthetical='overruling xyz'
+                            )]),
+            # Test short form citation with page range and parenthetical
+            ('before asdf, 1 U. S., at 20-25 (overruling xyz)',
+             [case_citation(2, page='20', reporter='U.S.',
+                            reporter_found='U. S.', short=True,
+                            antecedent_guess='asdf',
+                            pin_cite='20-25',
+                            parenthetical='overruling xyz'
+                            )]),
             # Test first kind of supra citation (standard kind)
             ('before asdf, supra, at 2',
              [supra_citation(2, "supra,", antecedent_guess='asdf',
