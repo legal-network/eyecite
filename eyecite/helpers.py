@@ -7,6 +7,7 @@ from courts_db import courts
 from eyecite.models import (
     CaseCitation,
     CitationBase,
+    FullCaseCitation,
     ParagraphToken,
     StopWordToken,
     Token,
@@ -91,7 +92,7 @@ SUPRA_ANTECEDENT_REGEX = r"""
 #   court = 4th Cir.
 #   year = 2012
 #   parenthetical = overruling foo
-POST_CITATION_REGEX = rf"""
+POST_FULL_CITATION_REGEX = rf"""
     (?:  # handle a full cite with a valid year paren:
         # content before year paren:
         (?:
@@ -113,6 +114,17 @@ POST_CITATION_REGEX = rf"""
         (?:\ \((?P<parenthetical>[^)]+)\))?
     |  # handle a pin cite with no valid year paren:
         ,{PIN_CITE_REGEX}(?:,|\.|\ \()
+    )
+"""
+
+POST_SHORT_CITATION_REGEX = r"""
+    (?:  # handle a short cite's extra and parenthetical:
+        (?:
+            # optional extra
+            (?P<extra>[^(]*)
+        )
+        # optional parenthetical comment:
+        (?:\((?P<parenthetical>[^)]+)\))?
     )
 """
 
@@ -163,21 +175,27 @@ def add_post_citation(citation: CaseCitation, words: Tokens) -> None:
     """Add to a citation object any additional information found after the base
     citation, including court, year, and possibly page range.
 
-    See POST_CITATION_REGEX for examples.
+    See POST_FULL_CITATION_REGEX for examples.
     """
-    m = match_on_tokens(
-        words, citation.index + 1, POST_CITATION_REGEX, max_chars=150
+    is_full_citation = isinstance(citation, FullCaseCitation)
+    regex = (
+        POST_FULL_CITATION_REGEX
+        if is_full_citation
+        else POST_SHORT_CITATION_REGEX
     )
+    m = match_on_tokens(words, citation.index + 1, regex, max_chars=150)
     if not m:
         return
 
-    citation.pin_cite = m["pin_cite"]
-    citation.extra = (m["extra"] or "").strip() or None
     citation.parenthetical = m["parenthetical"]
-    if m["year"]:
-        citation.year = get_year(m["year"])
-    if m["court"]:
-        citation.court = get_court_by_paren(m["court"])
+    # ShortCaseCitation pin cites are handled in extract_shortform_citations.
+    if isinstance(citation, FullCaseCitation):
+        citation.extra = (m["extra"] or "").strip() or None
+        citation.pin_cite = m["pin_cite"]
+        if m["year"]:
+            citation.year = get_year(m["year"])
+        if m["court"]:
+            citation.court = get_court_by_paren(m["court"])
 
 
 def add_defendant(citation: CaseCitation, words: Tokens) -> None:
