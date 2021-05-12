@@ -53,10 +53,10 @@ def get_citations(
                 citation = extract_shortform_citation(words, i)
             else:
                 citation = extract_full_citation(words, i)
-                if do_post_citation:
-                    add_post_citation(citation, words)
                 if do_defendant:
                     add_defendant(citation, words)
+            if do_post_citation:
+                add_post_citation(citation, words)
             citation.guess_edition()
             citation.guess_court()
 
