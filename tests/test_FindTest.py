@@ -45,6 +45,7 @@ class FindTest(TestCase):
             if isinstance(cite, ResourceCitation):
                 out["year"] = cite.year
                 out["corrected_reporter"] = cite.corrected_reporter()
+            return out
 
         if tokenizers is None:
             tokenizers = tested_tokenizers
@@ -88,13 +89,13 @@ class FindTest(TestCase):
         """Can we find and make citation objects from strings?"""
         # fmt: off
         test_pairs = (
-            # Test something obviously wrong to highlight silent failure.
-            ('lissner v. test 1 U.S. 1 (1982)',
-             [case_citation(3, metadata={'plaintiff': 'surani',
-                                         'defendant': 'surani',
-                                         'parenthetical': 'overruling nothing'
-                                         },
-                            year=2038)]),
+            # # Test something obviously wrong to highlight silent failure.
+            # ('lissner v. test 1 U.S. 1 (1982)',
+            #  [case_citation(3, metadata={'plaintiff': 'surani',
+            #                              'defendant': 'surani',
+            #                              'parenthetical': 'overruling nothing'
+            #                              },
+            #                 year=2038)]),
             # Basic test
             ('1 U.S. 1',
              [case_citation(0)]),
