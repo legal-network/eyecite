@@ -201,6 +201,91 @@ def _resolve_id_citation(
     return last_resolution
 
 
+class StreamingResolver:
+    """Resolve a list of citations to their associated resources as they are
+    encountered by matching each type of Citation object (FullCaseCitation,
+    ShortCaseCitation, SupraCitation, and IdCitation) to a "resource" object. A
+    "resource" could be a document, a URL, a database entry, etc. -- anything
+    that conforms to the (non-prescriptive) requirements of the
+    `eyecite.models.ResourceType` type. By default, eyecite uses an extremely
+    thin "resource" object that simply serves as a conceptual way to group
+    citations with the same references together.
+
+    This class assumes that each citation encountered in ordered legal text
+    is resolved in the order that it is encountered. This is because supra
+    citations and id citations can only refer to previous references. This
+    class is useful for resolving citations page by page, or sentence by
+    sentence.
+
+    Note that you must resolve each encountered citaiton, whether you actually
+    want to use the resolution or not. This is because the resolution of each
+    citation may affect the resolution of future citations.
+    """
+
+    def __init__(
+        self,
+        resolve_full_citation: Callable[
+            [FullCitation], ResourceType
+        ] = resolve_full_citation,
+        resolve_shortcase_citation: Callable[
+            [ShortCaseCitation, ResolvedFullCites],
+            Optional[ResourceType],
+        ] = _resolve_shortcase_citation,
+        resolve_supra_citation: Callable[
+            [SupraCitation, ResolvedFullCites],
+            Optional[ResourceType],
+        ] = _resolve_supra_citation,
+        resolve_id_citation: Callable[
+            [IdCitation, ResourceType, Resolutions], Optional[ResourceType]
+        ] = _resolve_id_citation,
+    ):
+        self.resolve_full_citation = resolve_full_citation
+        self.resolve_shortcase_citation = resolve_shortcase_citation
+        self.resolve_supra_citation = resolve_supra_citation
+        self.resolve_id_citation = resolve_id_citation
+        # Dict of all citation resolutions
+        self.resolutions: Resolutions = defaultdict(list)
+        # Dict mapping full citations to their resolved resources
+        self.resolved_full_cites: ResolvedFullCites = []
+        # The resource of the most recently resolved citation, if any
+        self.last_resolution: Optional[ResourceType] = None
+
+    def resolve(self, citation: CitationBase) -> Optional[ResourceType]:
+        # If the citation is a full citation, try to resolve it
+        if isinstance(citation, FullCitation):
+            resolution = self.resolve_full_citation(citation)
+            self.resolved_full_cites.append((citation, resolution))
+
+        # If the citation is a short case citation, try to resolve it
+        elif isinstance(citation, ShortCaseCitation):
+            resolution = self.resolve_shortcase_citation(
+                citation, self.resolved_full_cites
+            )
+
+        # If the citation is a supra citation, try to resolve it
+        elif isinstance(citation, SupraCitation):
+            resolution = self.resolve_supra_citation(
+                citation, self.resolved_full_cites
+            )
+
+        # If the citation is an id citation, try to resolve it
+        elif isinstance(citation, IdCitation):
+            resolution = self.resolve_id_citation(
+                citation, self.last_resolution, self.resolutions
+            )
+        # If the citation is to an unknown document, ignore for now
+        else:
+            resolution = None
+
+        self.last_resolution = resolution
+
+        if resolution:
+            # Record the citation in the appropriate list
+            self.resolutions[resolution].append(citation)
+
+        return resolution
+
+
 def resolve_citations(
     citations: List[CitationBase],
     resolve_full_citation: Callable[
@@ -260,45 +345,12 @@ def resolve_citations(
         A dictionary mapping `eyecite.models.ResourceType` objects (the keys)
             to lists of `eyecite.models.CitationBase` objects (the values).
     """
-    # Dict of all citation resolutions
-    resolutions: Resolutions = defaultdict(list)
-
-    # Dict mapping full citations to their resolved resources
-    resolved_full_cites: ResolvedFullCites = []
-
-    # The resource of the most recently resolved citation, if any
-    last_resolution: Optional[ResourceType] = None
-
-    # Iterate over each citation and attempt to resolve it to a resource
+    streaming_resolver = StreamingResolver(
+        resolve_full_citation=resolve_full_citation,
+        resolve_shortcase_citation=resolve_shortcase_citation,
+        resolve_supra_citation=resolve_supra_citation,
+        resolve_id_citation=resolve_id_citation,
+    )
     for citation in citations:
-        # If the citation is a full citation, try to resolve it
-        if isinstance(citation, FullCitation):
-            resolution = resolve_full_citation(citation)
-            resolved_full_cites.append((citation, resolution))
-
-        # If the citation is a short case citation, try to resolve it
-        elif isinstance(citation, ShortCaseCitation):
-            resolution = resolve_shortcase_citation(
-                citation, resolved_full_cites
-            )
-
-        # If the citation is a supra citation, try to resolve it
-        elif isinstance(citation, SupraCitation):
-            resolution = resolve_supra_citation(citation, resolved_full_cites)
-
-        # If the citation is an id citation, try to resolve it
-        elif isinstance(citation, IdCitation):
-            resolution = resolve_id_citation(
-                citation, last_resolution, resolutions
-            )
-
-        # If the citation is to an unknown document, ignore for now
-        else:
-            resolution = None
-
-        last_resolution = resolution
-        if resolution:
-            # Record the citation in the appropriate list
-            resolutions[resolution].append(citation)
-
-    return resolutions
+        streaming_resolver.resolve(citation)
+    return streaming_resolver.resolutions
