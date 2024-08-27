@@ -254,7 +254,7 @@ POST_FULL_CITATION_REGEX = rf"""
         # content within year paren:
         \((?:
             # court and year:
-            (?P<court>[^)]+)\ {YEAR_REGEX}|
+            (?P<court>[^)]+)\ ?{YEAR_REGEX}|
             # just year:
             {YEAR_REGEX}
         )\)
